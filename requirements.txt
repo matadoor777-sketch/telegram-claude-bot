@@ -2,3 +2,4 @@ python-telegram-bot==21.0.1
 anthropic==0.34.2
 httpx==0.27.2
 flask
+requests
