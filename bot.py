@@ -1,6 +1,8 @@
 import os
+import re
 import threading
 import asyncio
+import requests
 from flask import Flask, request
 from telegram.ext import Application, MessageHandler, CommandHandler, filters
 from telegram import Update
@@ -9,6 +11,7 @@ import anthropic
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 CHAT_ID = os.environ.get("CHAT_ID")
+CMC_API_KEY = os.environ.get("CMC_API_KEY")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -35,6 +38,51 @@ SYSTEM_PROMPT = """
 قواعد عامة:
 - كن مباشرًا وواضحًا، وأضف تنويهًا عند المواضيع الحسّاسة.
 """
+
+# ---------- CoinMarketCap ----------
+
+COMMON_COINS = {
+    "بيتكوين": "BTC", "بتكوين": "BTC", "btc": "BTC",
+    "ايثيريوم": "ETH", "إيثريوم": "ETH", "eth": "ETH",
+    "سولانا": "SOL", "sol": "SOL",
+    "usdt": "USDT", "تيثر": "USDT",
+    "بينانس": "BNB", "bnb": "BNB",
+    "ريبل": "XRP", "xrp": "XRP",
+    "دوجكوين": "DOGE", "doge": "DOGE",
+}
+
+def check_crypto_query(user_message):
+    """يدور على اسم عملة في رسالة المستخدم"""
+    text_lower = user_message.lower()
+    for keyword, symbol in COMMON_COINS.items():
+        if keyword in text_lower:
+            return symbol
+    return None
+
+def get_crypto_data(symbol):
+    """يجيب بيانات العملة من CoinMarketCap"""
+    url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+    headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY}
+    params = {"symbol": symbol.upper(), "convert": "USD"}
+
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        data = response.json()
+
+        if "data" not in data or symbol.upper() not in data["data"]:
+            return None
+
+        coin = data["data"][symbol.upper()]["quote"]["USD"]
+        return {
+            "price": coin["price"],
+            "market_cap": coin["market_cap"],
+            "change_24h": coin["percent_change_24h"]
+        }
+    except Exception as e:
+        print(f"CMC API error: {e}")
+        return None
+
+# ---------- Claude ----------
 
 def ask_claude(prompt):
     response = client.messages.create(
@@ -66,7 +114,22 @@ async def summarize(update: Update, context):
 
 async def handle_message(update: Update, context):
     user_text = update.message.text
-    reply = ask_claude(user_text)
+
+    symbol = check_crypto_query(user_text)
+    crypto_context = ""
+
+    if symbol:
+        data = get_crypto_data(symbol)
+        if data:
+            crypto_context = (
+                f"\n\n[بيانات سعرية حالية لـ {symbol}]: "
+                f"السعر: ${data['price']:.2f}, "
+                f"القيمة السوقية: ${data['market_cap']:,.0f}, "
+                f"التغير خلال 24 ساعة: {data['change_24h']:.2f}%"
+            )
+
+    final_message = user_text + crypto_context
+    reply = ask_claude(final_message)
     await update.message.reply_text(reply)
 
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
