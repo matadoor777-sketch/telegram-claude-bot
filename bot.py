@@ -68,4 +68,4 @@ def get_crypto_data(symbol):
         response = requests.get(url, headers=headers, params=params, timeout=10)
         data = response.json()
 
-        if "data" not in data or symbol.upper() no
+         if "data" not in data or symbol.upper() not in data["data"]:
