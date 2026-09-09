@@ -1,5 +1,4 @@
 import os
-import re
 import threading
 import asyncio
 import requests
@@ -69,89 +68,4 @@ def get_crypto_data(symbol):
         response = requests.get(url, headers=headers, params=params, timeout=10)
         data = response.json()
 
-        if "data" not in data or symbol.upper() not in data["data"]:
-            return None
-
-        coin = data["data"][symbol.upper()]["quote"]["USD"]
-        return {
-            "price": coin["price"],
-            "market_cap": coin["market_cap"],
-            "change_24h": coin["percent_change_24h"]
-        }
-    except Exception as e:
-        print(f"CMC API error: {e}")
-        return None
-
-# ---------- Claude ----------
-
-def ask_claude(prompt):
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1000,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.content[0].text
-
-async def translate(update: Update, context):
-    if not context.args:
-        await update.message.reply_text("استخدم: /translate <اللغة> <النص>")
-        return
-    target_lang = context.args[0]
-    text = " ".join(context.args[1:])
-    prompt = f"Translate the following text to {target_lang}. Only return the translation:\n\n{text}"
-    reply = ask_claude(prompt)
-    await update.message.reply_text(reply)
-
-async def summarize(update: Update, context):
-    if not context.args:
-        await update.message.reply_text("استخدم: /summarize <النص>")
-        return
-    text = " ".join(context.args)
-    prompt = f"لخّص النص التالي في نقاط مختصرة وواضحة:\n\n{text}"
-    reply = ask_claude(prompt)
-    await update.message.reply_text(reply)
-
-async def handle_message(update: Update, context):
-    user_text = update.message.text
-
-    symbol = check_crypto_query(user_text)
-    crypto_context = ""
-
-    if symbol:
-        data = get_crypto_data(symbol)
-        if data:
-            crypto_context = (
-                f"\n\n[بيانات سعرية حالية لـ {symbol}]: "
-                f"السعر: ${data['price']:.2f}, "
-                f"القيمة السوقية: ${data['market_cap']:,.0f}, "
-                f"التغير خلال 24 ساعة: {data['change_24h']:.2f}%"
-            )
-
-    final_message = user_text + crypto_context
-    reply = ask_claude(final_message)
-    await update.message.reply_text(reply)
-
-telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
-telegram_app.add_handler(CommandHandler("translate", translate))
-telegram_app.add_handler(CommandHandler("summarize", summarize))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-flask_app = Flask(__name__)
-
-@flask_app.route("/webhook", methods=["POST"])
-def tradingview_webhook():
-    data = request.get_data(as_text=True)
-    asyncio.run(send_alert(data))
-    return "OK", 200
-
-async def send_alert(message):
-    await telegram_app.bot.send_message(chat_id=CHAT_ID, text=f"📈 تنبيه من TradingView:\n{message}")
-
-def run_flask():
-    port = int(os.environ.get("PORT", 5000))
-    flask_app.run(host="0.0.0.0", port=port)
-
-if __name__ == "__main__":
-    threading.Thread(target=run_flask).start()
-    telegram_app.run_polling()
+        if "data" not in data or symbol.upper() no
