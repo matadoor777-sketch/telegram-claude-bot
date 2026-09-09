@@ -1,10 +1,14 @@
 import os
+import threading
+import asyncio
+from flask import Flask, request
 from telegram.ext import Application, MessageHandler, CommandHandler, filters
 from telegram import Update
 import anthropic
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+CHAT_ID = os.environ.get("CHAT_ID")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -12,33 +16,24 @@ SYSTEM_PROMPT = """
 أنت مساعد ذكي متعدد التخصصات، مهمتك مساعدة المستخدمين في المجالات التالية بأسلوب واضح ومباشر:
 
 1. التداول والعملات الرقمية:
-- اشرح مفاهيم التحليل الفني والأساسي، إدارة رأس المال، إدارة المخاطر، أنواع العملات الرقمية والبلوكتشين.
-- لا تقدم توصيات استثمارية مباشرة، بل معلومات تعليمية تساعد المستخدم على اتخاذ قراره بنفسه.
+- اشرح مفاهيم التحليل الفني والأساسي، إدارة رأس المال، إدارة المخاطر.
+- لا تقدم توصيات استثمارية مباشرة، بل معلومات تعليمية.
 - ذكّر أن الأسواق متقلبة وأنك لست مستشارًا ماليًا مرخصًا.
 
 2. التغذية والعلاج بالأعشاب:
-- معلومات عامة عن الأنظمة الغذائية والأعشاب الشائعة واستخداماتها التقليدية.
-- نبّه أن الأعشاب قد تتعارض مع أدوية معينة، وأن الحمل أو الرضاعة أو الحالات الصحية تستوجب استشارة طبيب.
-- لا تقدم جرعات علاجية لحالات خطيرة، وأحِل الحالات الحرجة لطبيب مختص.
+- معلومات عامة، ونبّه لاستشارة طبيب عند الحاجة.
 
 3. التدريب الرياضي واللياقة البدنية:
-- برامج تدريبية عامة (قوة، كارديو، مرونة) حسب مستوى المستخدم وأهدافه.
-- مبادئ التغذية الرياضية والتعافي والإحماء الصحيح.
-- انصح بمراجعة مختص عند وجود إصابة أو حالة مزمنة.
+- برامج عامة حسب مستوى المستخدم وأهدافه.
 
 4. الترجمة:
-- ترجم بدقة بين جميع اللغات مع الحفاظ على المعنى والسياق.
-- دقة خاصة بالمصطلحات التقنية والطبية والمالية.
+- ترجم بدقة بين جميع اللغات.
 
 5. طب الأسنان:
-- معلومات عامة عن صحة الفم والأسنان والوقاية والأعراض الشائعة.
-- لا تشخّص حالات محددة، وأحِل أي ألم جدي لطبيب أسنان.
+- معلومات عامة، وأحِل الحالات الجدية لطبيب مختص.
 
 قواعد عامة:
-- كن مباشرًا وواضحًا.
-- عند التطرق لموضوع صحي أو مالي حسّاس، أضف تنويهًا مختصرًا بأنك لا تغني عن استشارة مختص.
-- إذا كان السؤال غامضًا، اسأل توضيحًا واحدًا فقط قبل الإجابة.
-- تجنّب أي معلومة قد تُستخدم بشكل ضار.
+- كن مباشرًا وواضحًا، وأضف تنويهًا عند المواضيع الحسّاسة.
 """
 
 def ask_claude(prompt):
@@ -56,7 +51,7 @@ async def translate(update: Update, context):
         return
     target_lang = context.args[0]
     text = " ".join(context.args[1:])
-    prompt = f"Translate the following text to {target_lang}. Only return the translation, nothing else:\n\n{text}"
+    prompt = f"Translate the following text to {target_lang}. Only return the translation:\n\n{text}"
     reply = ask_claude(prompt)
     await update.message.reply_text(reply)
 
@@ -74,9 +69,26 @@ async def handle_message(update: Update, context):
     reply = ask_claude(user_text)
     await update.message.reply_text(reply)
 
-app = Application.builder().token(TELEGRAM_TOKEN).build()
-app.add_handler(CommandHandler("translate", translate))
-app.add_handler(CommandHandler("summarize", summarize))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+telegram_app.add_handler(CommandHandler("translate", translate))
+telegram_app.add_handler(CommandHandler("summarize", summarize))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-app.run_polling()
+flask_app = Flask(__name__)
+
+@flask_app.route("/webhook", methods=["POST"])
+def tradingview_webhook():
+    data = request.get_data(as_text=True)
+    asyncio.run(send_alert(data))
+    return "OK", 200
+
+async def send_alert(message):
+    await telegram_app.bot.send_message(chat_id=CHAT_ID, text=f"📈 تنبيه من TradingView:\n{message}")
+
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    flask_app.run(host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    threading.Thread(target=run_flask).start()
+    telegram_app.run_polling()
