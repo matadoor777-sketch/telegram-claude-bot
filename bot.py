@@ -1,27 +1,17 @@
 import os
-import json
-import logging
-import asyncio
+import base64
 import threading
-
+import asyncio
 from flask import Flask, request
 from telegram.ext import Application, MessageHandler, CommandHandler, filters
 from telegram import Update
 import anthropic
-import httpx
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-CMC_API_KEY = os.environ.get("CMC_API_KEY")
 CHAT_ID = os.environ.get("CHAT_ID")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-MAX_HISTORY = 20
-conversation_history = {}
 
 SYSTEM_PROMPT = """
 أنت مساعد ذكي متعدد التخصصات، مهمتك مساعدة المستخدمين في المجالات التالية بأسلوب واضح ومباشر:
@@ -29,10 +19,10 @@ SYSTEM_PROMPT = """
 1. التداول والعملات الرقمية:
 - اشرح مفاهيم التحليل الفني والأساسي، إدارة رأس المال، إدارة المخاطر.
 - لا تقدم توصيات استثمارية مباشرة، بل معلومات تعليمية.
-- ذكر أن الأسواق متقلبة وأنك لست مستشارا ماليا مرخصا.
+- ذكّر أن الأسواق متقلبة وأنك لست مستشارًا ماليًا مرخصًا.
 
 2. التغذية والعلاج بالأعشاب:
-- معلومات عامة، ونبه لاستشارة طبيب عند الحاجة.
+- معلومات عامة، ونبّه لاستشارة طبيب عند الحاجة.
 
 3. التدريب الرياضي واللياقة البدنية:
 - برامج عامة حسب مستوى المستخدم وأهدافه.
@@ -41,92 +31,20 @@ SYSTEM_PROMPT = """
 - ترجم بدقة بين جميع اللغات.
 
 5. طب الأسنان:
-- معلومات عامة، وأحل الحالات الجدية لطبيب مختص.
+- معلومات عامة، وأحِل الحالات الجدية لطبيب مختص.
 
 قواعد عامة:
-- كن مباشرا وواضحا، وأضف تنويها عند المواضيع الحساسة.
+- كن مباشرًا وواضحًا، وأضف تنويهًا عند المواضيع الحسّاسة.
 """
 
-
-def get_history(chat_id):
-    if chat_id not in conversation_history:
-        conversation_history[chat_id] = []
-    return conversation_history[chat_id]
-
-
-def add_to_history(chat_id, role, content):
-    history = get_history(chat_id)
-    history.append({"role": role, "content": content})
-    if len(history) > MAX_HISTORY:
-        conversation_history[chat_id] = history[-MAX_HISTORY:]
-
-
-def ask_claude(chat_id, prompt):
-    add_to_history(chat_id, "user", prompt)
-    messages = get_history(chat_id)
+def ask_claude(prompt):
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1000,
         system=SYSTEM_PROMPT,
-        messages=messages
+        messages=[{"role": "user", "content": prompt}]
     )
-    reply = response.content[0].text
-    add_to_history(chat_id, "assistant", reply)
-    return reply
-
-
-def check_crypto_query(text):
-    keywords = ["سعر", "price", "بيتكوين", "بتكوين", "btc", "eth", "ايثيريوم"]
-    text_lower = text.lower()
-    return any(k in text_lower for k in keywords)
-
-
-def get_crypto_data(symbol):
-    if not CMC_API_KEY:
-        return "لم يتم إعداد مفتاح CoinMarketCap (CMC_API_KEY) بعد."
-
-    url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
-    headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY}
-    params = {"symbol": symbol.upper()}
-
-    try:
-        resp = httpx.get(url, headers=headers, params=params, timeout=10)
-        data = resp.json()
-
-        if "data" not in data or symbol.upper() not in data["data"]:
-            return f"لم أجد بيانات للعملة {symbol}. تأكد من الرمز (مثل BTC أو ETH)."
-
-        quote = data["data"][symbol.upper()]["quote"]["USD"]
-        price = quote["price"]
-        change_24h = quote["percent_change_24h"]
-
-        return (
-            f"💰 سعر {symbol.upper()}: ${price:,.2f}\n"
-            f"📊 التغير خلال 24 ساعة: {change_24h:.2f}%"
-        )
-    except Exception as e:
-        logger.error(f"CoinMarketCap error: {e}")
-        return "حدث خطأ أثناء جلب سعر العملة. حاول مرة أخرى بعد قليل."
-
-
-async def price_command(update: Update, context):
-    if not context.args:
-        await update.message.reply_text("استخدم: /price BTC")
-        return
-    symbol = context.args[0]
-    reply = get_crypto_data(symbol)
-    await update.message.reply_text(reply)
-
-
-async def reset_command(update: Update, context):
-    chat_id = update.message.chat_id
-    conversation_history[chat_id] = []
-    await update.message.reply_text("تم مسح الذاكرة، نبدأ محادثة جديدة.")
-
-
-async def myid_command(update: Update, context):
-    await update.message.reply_text(f"Chat ID: {update.message.chat_id}")
-
+    return response.content[0].text
 
 async def translate(update: Update, context):
     if not context.args:
@@ -135,47 +53,53 @@ async def translate(update: Update, context):
     target_lang = context.args[0]
     text = " ".join(context.args[1:])
     prompt = f"Translate the following text to {target_lang}. Only return the translation:\n\n{text}"
-    reply = ask_claude(update.message.chat_id, prompt)
+    reply = ask_claude(prompt)
     await update.message.reply_text(reply)
-
 
 async def summarize(update: Update, context):
     if not context.args:
         await update.message.reply_text("استخدم: /summarize <النص>")
         return
     text = " ".join(context.args)
-    prompt = f"لخص النص التالي في نقاط مختصرة وواضحة:\n\n{text}"
-    reply = ask_claude(update.message.chat_id, prompt)
+    prompt = f"لخّص النص التالي في نقاط مختصرة وواضحة:\n\n{text}"
+    reply = ask_claude(prompt)
     await update.message.reply_text(reply)
-
 
 async def handle_message(update: Update, context):
-    chat_id = update.message.chat_id
     user_text = update.message.text
-
-    if check_crypto_query(user_text):
-        reply = "لتفاصيل سعر عملة معينة استخدم: /price BTC (أو أي رمز عملة آخر)"
-    else:
-        reply = ask_claude(chat_id, user_text)
-
+    reply = ask_claude(user_text)
     await update.message.reply_text(reply)
 
+async def handle_photo(update: Update, context):
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    photo_bytes = await file.download_as_bytearray()
+    image_b64 = base64.b64encode(photo_bytes).decode("utf-8")
 
-def build_telegram_app():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("price", price_command))
-    app.add_handler(CommandHandler("reset", reset_command))
-    app.add_handler(CommandHandler("myid", myid_command))
-    app.add_handler(CommandHandler("translate", translate))
-    app.add_handler(CommandHandler("summarize", summarize))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    return app
+    caption = update.message.caption or "صف لي هذه الصورة بالتفصيل"
 
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1000,
+        system=SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
+                {"type": "text", "text": caption}
+            ]
+        }]
+    )
+    reply = response.content[0].text
+    await update.message.reply_text(reply)
 
-telegram_app = build_telegram_app()
+telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+telegram_app.add_handler(CommandHandler("translate", translate))
+telegram_app.add_handler(CommandHandler("summarize", summarize))
+telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 flask_app = Flask(__name__)
-
 
 @flask_app.route("/webhook", methods=["POST"])
 def tradingview_webhook():
@@ -183,23 +107,13 @@ def tradingview_webhook():
     asyncio.run(send_alert(data))
     return "OK", 200
 
-
 async def send_alert(message):
-    if CHAT_ID:
-        await telegram_app.bot.send_message(chat_id=CHAT_ID, text=f"📈 تنبيه من TradingView:\n{message}")
-
+    await telegram_app.bot.send_message(chat_id=CHAT_ID, text=f"📈 تنبيه من TradingView:\n{message}")
 
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
     flask_app.run(host="0.0.0.0", port=port)
 
-
 if __name__ == "__main__":
-    if not TELEGRAM_TOKEN:
-        logger.error("TELEGRAM_TOKEN is missing!")
-    if not ANTHROPIC_API_KEY:
-        logger.error("ANTHROPIC_API_KEY is missing!")
-
-    threading.Thread(target=run_flask, daemon=True).start()
-    logger.info("Bot is starting...")
-    telegram_app.run_polling(drop_pending_updates=True)
+    threading.Thread(target=run_flask).start()
+    telegram_app.run_polling()
