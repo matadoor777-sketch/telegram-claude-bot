@@ -1,4 +1,8 @@
 import os
+import requests
+import os
+
+CHART_IMG_API_KEY = os.environ.get("CHART_IMG_API_KEY")
 import base64
 import threading
 import asyncio
