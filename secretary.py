@@ -141,8 +141,4 @@ async def feeds_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------- التقرير الصباحي ----------
-async def send_morning(bot, chat_id):
-    news = await asyncio.to_thread(fetch_news)
-    items = load_notes().get(str(chat_id), [])
-    notes = "\n".join("- " + t for t in items) if items else "لا توجد ملاحظات."
-    msg
+async def send_mo
