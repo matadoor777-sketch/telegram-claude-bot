@@ -127,3 +127,17 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     telegram_app.run_polling()
+import feedparser
+
+def get_crypto_news():
+    feed = feedparser.parse("https://www.coindesk.com/arc/outboundfeeds/rss/")
+    items = feed.entries[:5]
+    news_text = "📰 آخر أخبار السوق:\n\n"
+    for item in items:
+        news_text += f"• {item.title}\n{item.link}\n\n"
+    return news_text
+async def news_command(update, context):
+    news = get_crypto_news()
+    await update.message.reply_text(news)
+
+app.add_handler(CommandHandler("news", news_command))
