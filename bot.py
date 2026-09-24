@@ -103,4 +103,27 @@ async def chart_command(update: Update, context):
 
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
 secretary.register(telegram_app)
-telegram_app.add_handler(CommandHandler("translate",
+telegram_app.add_handler(CommandHandler("translate", translate))
+telegram_app.add_handler(CommandHandler("summarize", summarize))
+telegram_app.add_handler(CommandHandler("chart", chart_command))
+telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+flask_app = Flask(__name__)
+
+@flask_app.route("/webhook", methods=["POST"])
+def tradingview_webhook():
+    data = request.get_data(as_text=True)
+    asyncio.run(send_alert(data))
+    return "OK", 200
+
+async def send_alert(message):
+    await telegram_app.bot.send_message(chat_id=CHAT_ID, text="📈 تنبيه من TradingView:\n" + message)
+
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    flask_app.run(host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    threading.Thread(target=run_flask).start()
+    telegram_app.run_polling()
