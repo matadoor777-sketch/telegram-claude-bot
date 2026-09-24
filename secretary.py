@@ -20,6 +20,7 @@ FEEDS = {
     "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
     "العربية - أسواق": "https://www.alarabiya.net/feed/rss2/ar/aswaq.xml",
+    "سكاي نيوز عربية": "https://www.skynewsarabia.com/rss.xml",
 }
 
 # ---------- الملاحظات ----------
