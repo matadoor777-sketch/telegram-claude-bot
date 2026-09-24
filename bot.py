@@ -141,3 +141,36 @@ async def news_command(update, context):
     await update.message.reply_text(news)
 
 app.add_handler(CommandHandler("news", news_command))
+import feedparser
+from anthropic import Anthropic
+
+client = Anthropic()
+
+def translate_to_arabic(text):
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=800,
+        messages=[
+            {"role": "user", "content": f"ترجم النص التالي للعربية فقط، بدون أي مقدمات أو تعليق:\n\n{text}"}
+        ]
+    )
+    return response.content[0].text.strip()
+
+def get_crypto_news():
+    sources = [
+        "https://www.coindesk.com/arc/outboundfeeds/rss/",           # كريبتو
+        "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"  # اقتصاد عام (وول ستريت جورنال)
+    ]
+    
+    all_items = []
+    for url in sources:
+        feed = feedparser.parse(url)
+        all_items.extend(feed.entries[:5])  # 5 من كل مصدر = 10 أخبار
+    
+    news_text = "📰 آخر الأخبار الاقتصادية:\n\n"
+    for item in all_items:
+        title_ar = translate_to_arabic(item.title)
+        summary_ar = translate_to_arabic(item.summary) if hasattr(item, "summary") else ""
+        
+        news_text += f"🔹 {title_ar}\n{summary_ar}\n{item.link}\n\n"
+    return news_text
