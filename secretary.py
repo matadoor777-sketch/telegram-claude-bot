@@ -11,6 +11,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 TZ = ZoneInfo("Asia/Kuwait")
 NOTES_FILE = "notes.json"
+feedparser.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 MORNING_HOUR = 8  # وقت التقرير الصباحي بتوقيت الكويت
 
 # مصادر الأخبار. الروابط قابلة للتعديل، واستخدم /feeds لاختبارها
