@@ -141,4 +141,36 @@ async def feeds_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------- التقرير الصباحي ----------
-async def send_mo
+async def send_morning(bot, chat_id):
+    news = await asyncio.to_thread(fetch_news)
+    items = load_notes().get(str(chat_id), [])
+    notes = "\n".join("- " + t for t in items) if items else "لا توجد ملاحظات."
+    msg = "صباح الخير\n\nملاحظاتك:\n" + notes + "\n\nأخبار اليوم:\n" + news
+    await bot.send_message(chat_id=chat_id, text=msg[:4000])
+
+
+async def morning_job(context: ContextTypes.DEFAULT_TYPE):
+    await send_morning(context.bot, context.job.chat_id)
+
+
+async def morning_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_morning(context.bot, update.effective_chat.id)
+
+
+# ---------- التسجيل ----------
+def register(app: Application):
+    app.add_handler(CommandHandler("note", note_cmd))
+    app.add_handler(CommandHandler("notes", notes_cmd))
+    app.add_handler(CommandHandler("delnote", delnote_cmd))
+    app.add_handler(CommandHandler("remind", remind_cmd))
+    app.add_handler(CommandHandler("news", news_cmd))
+    app.add_handler(CommandHandler("feeds", feeds_cmd))
+    app.add_handler(CommandHandler("morning", morning_cmd))
+
+    chat_id = os.environ.get("CHAT_ID")
+    if chat_id and app.job_queue:
+        app.job_queue.run_daily(
+            morning_job,
+            time=dtime(MORNING_HOUR, 0, tzinfo=TZ),
+            chat_id=int(chat_id),
+        )
