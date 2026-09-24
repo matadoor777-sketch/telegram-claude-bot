@@ -194,20 +194,41 @@ def translate_to_arabic(text):
     )
     return response.content[0].text.strip()
 
-def get_crypto_news():
-    sources = {
-        "BBC عربي": "رابط_مصدر_BBC",
-        "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
-        "Al Jazeera": "رابط_مصدر_الجزيرة",
-        "سكاي نيوز عربية": "رابط_مصدر_سكاي_نيوز",
-    }
+def is_arabic(text):
+    return any('\u0600' <= c <= '\u06FF' for c in text)
 
-    news_text = ""
+def translate_to_arabic(text):
+    if not text or is_arabic(text):
+        return text
+    try:
+        prompt = f"ترجم النص التالي للعربية فقط، بدون أي مقدمات:\n\n{text}"
+        return ask_claude(prompt)
+    except Exception:
+        return text
+
+def get_crypto_news():
+    import feedparser
+    sources = {
+        "🇬🇧 BBC عربي": "https://feeds.bbci.co.uk/arabic/rss.xml",
+        "🪙 CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+        "📰 Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
+        "📡 سكاي نيوز عربية": "https://www.skynewsarabia.com/rss.xml",
+    }
+    news_text = "📰 آخر الأخبار:\n"
     for source_name, url in sources.items():
-        feed = feedparser.parse(url)
-        items = feed.entries[:3]
-        news_text += f"\n{source_name}:\n"
-        for item in items:
-            title_ar = translate_to_arabic(item.title)
-            news_text += f"- {title_ar}\n"
+        try:
+            feed = feedparser.parse(url)
+            items = feed.entries[:3]
+            if not items:
+                continue
+            news_text += f"\n{source_name}:\n"
+            for item in items:
+                title_ar = translate_to_arabic(item.title)
+                news_text += f"- {title_ar}\n"
+        except Exception:
+            continue
     return news_text
+
+async def news_command(update: Update, context):
+    news = get_crypto_news()
+    await update.message.reply_text(news)
