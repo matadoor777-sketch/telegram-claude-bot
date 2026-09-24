@@ -174,3 +174,40 @@ def get_crypto_news():
         
         news_text += f"🔹 {title_ar}\n{summary_ar}\n{item.link}\n\n"
     return news_text
+import feedparser
+from anthropic import Anthropic
+
+client = Anthropic()
+
+def is_arabic(text):
+    return any('\u0600' <= c <= '\u06FF' for c in text)
+
+def translate_to_arabic(text):
+    if is_arabic(text):
+        return text  # أصلاً عربي، ما يحتاج ترجمة
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=500,
+        messages=[
+            {"role": "user", "content": f"ترجم النص التالي للعربية فقط، بدون أي مقدمات أو تعليق:\n\n{text}"}
+        ]
+    )
+    return response.content[0].text.strip()
+
+def get_crypto_news():
+    sources = {
+        "BBC عربي": "رابط_مصدر_BBC",
+        "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+        "Al Jazeera": "رابط_مصدر_الجزيرة",
+        "سكاي نيوز عربية": "رابط_مصدر_سكاي_نيوز",
+    }
+
+    news_text = ""
+    for source_name, url in sources.items():
+        feed = feedparser.parse(url)
+        items = feed.entries[:3]
+        news_text += f"\n{source_name}:\n"
+        for item in items:
+            title_ar = translate_to_arabic(item.title)
+            news_text += f"- {title_ar}\n"
+    return news_text
