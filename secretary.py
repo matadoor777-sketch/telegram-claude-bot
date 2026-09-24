@@ -19,7 +19,7 @@ FEEDS = {
     "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
     "العربية - أسواق": "https://www.alarabiya.net/feed/rss2/ar/aswaq.xml",
-
+}
 
 # ---------- الملاحظات ----------
 def load_notes():
