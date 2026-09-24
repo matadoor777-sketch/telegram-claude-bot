@@ -18,8 +18,7 @@ FEEDS = {
     "BBC عربي": "https://feeds.bbci.co.uk/arabic/rss.xml",
     "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
-    "الشرق للأخبار": "https://asharqbusiness.com/rss",
-}
+    "العربية - أسواق": "https://www.alarabiya.net/feed/rss2/ar/aswaq.xml",
 
 
 # ---------- الملاحظات ----------
