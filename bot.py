@@ -3,6 +3,7 @@ import requests
 import base64
 import threading
 import asyncio
+import feedparser
 from flask import Flask, request
 from telegram.ext import Application, MessageHandler, CommandHandler, filters
 from telegram import Update
@@ -101,99 +102,6 @@ async def chart_command(update: Update, context):
     except Exception as e:
         await update.message.reply_text("صار خطأ بجلب الشارت: " + str(e))
 
-telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
-secretary.register(telegram_app)
-telegram_app.add_handler(CommandHandler("translate", translate))
-telegram_app.add_handler(CommandHandler("summarize", summarize))
-telegram_app.add_handler(CommandHandler("chart", chart_command))
-telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-flask_app = Flask(__name__)
-
-@flask_app.route("/webhook", methods=["POST"])
-def tradingview_webhook():
-    data = request.get_data(as_text=True)
-    asyncio.run(send_alert(data))
-    return "OK", 200
-
-async def send_alert(message):
-    await telegram_app.bot.send_message(chat_id=CHAT_ID, text="📈 تنبيه من TradingView:\n" + message)
-
-def run_flask():
-    port = int(os.environ.get("PORT", 5000))
-    flask_app.run(host="0.0.0.0", port=port)
-
-if __name__ == "__main__":
-    threading.Thread(target=run_flask).start()
-    telegram_app.run_polling()
-import feedparser
-
-def get_crypto_news():
-    feed = feedparser.parse("https://www.coindesk.com/arc/outboundfeeds/rss/")
-    items = feed.entries[:5]
-    news_text = "📰 آخر أخبار السوق:\n\n"
-    for item in items:
-        news_text += f"• {item.title}\n{item.link}\n\n"
-    return news_text
-async def news_command(update, context):
-    news = get_crypto_news()
-    await update.message.reply_text(news)
-
-app.add_handler(CommandHandler("news", news_command))
-import feedparser
-from anthropic import Anthropic
-
-client = Anthropic()
-
-def translate_to_arabic(text):
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=800,
-        messages=[
-            {"role": "user", "content": f"ترجم النص التالي للعربية فقط، بدون أي مقدمات أو تعليق:\n\n{text}"}
-        ]
-    )
-    return response.content[0].text.strip()
-
-def get_crypto_news():
-    sources = [
-        "https://www.coindesk.com/arc/outboundfeeds/rss/",           # كريبتو
-        "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"  # اقتصاد عام (وول ستريت جورنال)
-    ]
-    
-    all_items = []
-    for url in sources:
-        feed = feedparser.parse(url)
-        all_items.extend(feed.entries[:5])  # 5 من كل مصدر = 10 أخبار
-    
-    news_text = "📰 آخر الأخبار الاقتصادية:\n\n"
-    for item in all_items:
-        title_ar = translate_to_arabic(item.title)
-        summary_ar = translate_to_arabic(item.summary) if hasattr(item, "summary") else ""
-        
-        news_text += f"🔹 {title_ar}\n{summary_ar}\n{item.link}\n\n"
-    return news_text
-import feedparser
-from anthropic import Anthropic
-
-client = Anthropic()
-
-def is_arabic(text):
-    return any('\u0600' <= c <= '\u06FF' for c in text)
-
-def translate_to_arabic(text):
-    if is_arabic(text):
-        return text  # أصلاً عربي، ما يحتاج ترجمة
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=500,
-        messages=[
-            {"role": "user", "content": f"ترجم النص التالي للعربية فقط، بدون أي مقدمات أو تعليق:\n\n{text}"}
-        ]
-    )
-    return response.content[0].text.strip()
-
 def is_arabic(text):
     return any('\u0600' <= c <= '\u06FF' for c in text)
 
@@ -207,7 +115,6 @@ def translate_to_arabic(text):
         return text
 
 def get_crypto_news():
-    import feedparser
     sources = {
         "🇬🇧 BBC عربي": "https://feeds.bbci.co.uk/arabic/rss.xml",
         "🪙 CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
@@ -232,3 +139,31 @@ def get_crypto_news():
 async def news_command(update: Update, context):
     news = get_crypto_news()
     await update.message.reply_text(news)
+
+telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+secretary.register(telegram_app)
+telegram_app.add_handler(CommandHandler("translate", translate))
+telegram_app.add_handler(CommandHandler("summarize", summarize))
+telegram_app.add_handler(CommandHandler("chart", chart_command))
+telegram_app.add_handler(CommandHandler("news", news_command))
+telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+flask_app = Flask(__name__)
+
+@flask_app.route("/webhook", methods=["POST"])
+def tradingview_webhook():
+    data = request.get_data(as_text=True)
+    asyncio.run(send_alert(data))
+    return "OK", 200
+
+async def send_alert(message):
+    await telegram_app.bot.send_message(chat_id=CHAT_ID, text="📈 تنبيه من TradingView:\n" + message)
+
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    flask_app.run(host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    threading.Thread(target=run_flask).start()
+    telegram_app.run_polling()
