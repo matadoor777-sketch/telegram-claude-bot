@@ -111,7 +111,8 @@ def translate_to_arabic(text):
     try:
         prompt = f"ترجم النص التالي للعربية فقط، بدون أي مقدمات:\n\n{text}"
         return ask_claude(prompt)
-    except Exception:
+    except Exception as e:
+        print("ERROR translating:", e)
         return text
 
 def get_crypto_news():
